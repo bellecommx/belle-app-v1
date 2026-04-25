@@ -1,383 +1,348 @@
+%%writefile app_final_v14_noautofill.py
 import streamlit as st
-import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta, date
+import hashlib
+import uuid
 
-if "unlocked_days" not in st.session_state:
-    st.session_state.unlocked_days = set()
+# --- CONFIGURATION ---
+STRIPE_WEEKLY_LINK = "https://buy.stripe.com/14A5kF1Inbxl5kw3Ak0Jq00"
+STRIPE_YEARLY_LINK = "https://buy.stripe.com/5kQ5kF5YD30PdR2gn60Jq01"
+STRIPE_BIRTH_CHART_LINK = "https://buy.stripe.com/eVqbJ3biXathdR28UE0Jq02"
+ATLIER_COUPON_CODE = "BELLE50"
 
-if "unlocked_all" not in st.session_state:
-    st.session_state.unlocked_all = False
+# --- MANUAL VERIFICATION ---
+VALID_CODES = ["BELLE2026"]
 
-params = st.query_params
+# --- CORE LOGIC ---
 
-# only load ONCE
-if "loaded_from_url" not in st.session_state:
+def get_moon_phase():
+    try:
+        today = date.today()
+        phase_idx = (today.day % 29)
+        phases = ["New Moon","Waxing Crescent","First Quarter","Waxing Gibbous",
+                  "Full Moon","Waning Gibbous","Last Quarter","Waning Crescent"]
+        return phases[phase_idx // 3]
+    except Exception:
+        return "Unknown"
 
-    if "days" in params:
-        days_param = params["days"]
+def get_chinese_zodiac(dob):
+    if not dob:
+        return {"animal": "Unknown", "element": "Unknown"}
+    animals = ["Rat", "Ox", "Tiger", "Rabbit", "Dragon", "Snake", "Horse",
+               "Goat", "Monkey", "Rooster", "Dog", "Pig"]
+    stems = ["Wood", "Wood", "Fire", "Fire", "Earth", "Earth", "Metal", "Metal", "Water", "Water"]
+    animal_idx = (dob.year - 1924) % 12
+    stem_idx = (dob.year - 4) % 10
+    return {"animal": animals[animal_idx], "element": stems[stem_idx]}
 
-        if isinstance(days_param, list):
-            days_param = days_param[0]
+def validate_dob(year, month, day):
+    current_year = date.today().year
+    if not year:
+        return False, "Birth Year is required."
+    if year < 1900:
+        return False, "Please enter a realistic birth year (after 1900)."
+    if year > current_year - 18:
+        return False, "You must be at least 18 years old."
+    if month and not day:
+        return False, "If you select a month, you must also select a day."
+    if day and not month:
+        return False, "If you select a day, you must also select a month."
+    if month and day:
+        try:
+            date(year, month, day)
+        except ValueError:
+            return False, "Invalid date (e.g., February 31)."
+    return True, None
 
-        st.session_state.unlocked_days = set(map(int, days_param.split(",")))
-
-    if "all" in params:
-        st.session_state.unlocked_all = params["all"] == "1"
-
-    st.session_state.loaded_from_url = True
-
-# --------------------------------------------------
-# 1. BASE DAILY RULE DATA
-# --------------------------------------------------
-
-data = [
-    {
-        "day": "Monday",
-        "element": "Water",
-        "wear_colors": ["black", "navy", "deep blue"],
-        "avoid_colors": ["red", "orange"],
-        "primary_stone": "obsidian",
-        "primary_jewelry_type": "bracelet",
-        "support_stone_1": "moonstone",
-        "support_jewelry_type_1": "necklace",
-        "support_stone_2": "hematite",
-        "support_jewelry_type_2": "bracelet",
-        "favored_metals": ["silver"],
-        "avoid_metals": ["gold"],
-        "daily_theme": "Intuition and grounding",
-        "explanation": "Water energy supports introspection and emotional clarity. Favor grounding stones and calming tones."
-    },
-    {
-        "day": "Tuesday",
-        "element": "Fire",
-        "wear_colors": ["red", "burgundy"],
-        "avoid_colors": ["black", "blue"],
-        "primary_stone": "garnet",
-        "primary_jewelry_type": "necklace",
-        "support_stone_1": "citrine",
-        "support_jewelry_type_1": "bracelet",
-        "support_stone_2": "carnelian",
-        "support_jewelry_type_2": "earrings",
-        "favored_metals": ["gold"],
-        "avoid_metals": ["silver"],
-        "daily_theme": "Action and confidence",
-        "explanation": "Fire energy boosts courage and movement. Ideal for decision-making and leadership."
-    },
-    {
-        "day": "Wednesday",
-        "element": "Wood",
-        "wear_colors": ["green", "teal"],
-        "avoid_colors": ["white", "gray"],
-        "primary_stone": "jade",
-        "primary_jewelry_type": "bracelet",
-        "support_stone_1": "aventurine",
-        "support_jewelry_type_1": "necklace",
-        "support_stone_2": "peridot",
-        "support_jewelry_type_2": "earrings",
-        "favored_metals": ["silver"],
-        "avoid_metals": ["heavy gold"],
-        "daily_theme": "Growth and expansion",
-        "explanation": "Wood energy supports growth, creativity, and forward movement."
-    },
-    {
-        "day": "Thursday",
-        "element": "Wood",
-        "wear_colors": ["emerald", "green"],
-        "avoid_colors": ["black"],
-        "primary_stone": "emerald",
-        "primary_jewelry_type": "necklace",
-        "support_stone_1": "jade",
-        "support_jewelry_type_1": "bracelet",
-        "support_stone_2": "malachite",
-        "support_jewelry_type_2": "earrings",
-        "favored_metals": ["gold"],
-        "avoid_metals": ["silver"],
-        "daily_theme": "Expansion and influence",
-        "explanation": "Strong growth energy, ideal for communication and influence."
-    },
-    {
-        "day": "Friday",
-        "element": "Metal",
-        "wear_colors": ["white", "gold"],
-        "avoid_colors": ["green"],
-        "primary_stone": "diamond",
-        "primary_jewelry_type": "necklace",
-        "support_stone_1": "clear quartz",
-        "support_jewelry_type_1": "bracelet",
-        "support_stone_2": "pyrite",
-        "support_jewelry_type_2": "earrings",
-        "favored_metals": ["gold"],
-        "avoid_metals": ["wood materials"],
-        "daily_theme": "Refinement and attraction",
-        "explanation": "Metal energy enhances clarity, beauty, and attraction."
-    },
-    {
-        "day": "Saturday",
-        "element": "Earth",
-        "wear_colors": ["brown", "beige", "earth tones"],
-        "avoid_colors": ["neon colors"],
-        "primary_stone": "smoky quartz",
-        "primary_jewelry_type": "bracelet",
-        "support_stone_1": "jasper",
-        "support_jewelry_type_1": "necklace",
-        "support_stone_2": "onyx",
-        "support_jewelry_type_2": "ring",
-        "favored_metals": ["bronze"],
-        "avoid_metals": ["silver"],
-        "daily_theme": "Stability and grounding",
-        "explanation": "Earth energy supports restoration, balance, and physical grounding."
-    },
-    {
-        "day": "Sunday",
-        "element": "Fire",
-        "wear_colors": ["gold", "orange", "warm tones"],
-        "avoid_colors": ["dark gray"],
-        "primary_stone": "sunstone",
-        "primary_jewelry_type": "necklace",
-        "support_stone_1": "amber",
-        "support_jewelry_type_1": "bracelet",
-        "support_stone_2": "citrine",
-        "support_jewelry_type_2": "earrings",
-        "favored_metals": ["gold"],
-        "avoid_metals": ["heavy metals"],
-        "daily_theme": "Vitality and expression",
-        "explanation": "Fire energy enhances visibility, joy, and outward expression."
-    }
-]
-
-df_rules = pd.DataFrame(data)
-
-# --------------------------------------------------
-# 2. PROFILE LOGIC
-# --------------------------------------------------
-
-def get_birth_year_group(birth_year: int) -> str:
-    if birth_year <= 1979:
-        return "grounding"
-    elif birth_year <= 1989:
-        return "growth"
-    else:
-        return "expression"
-
-def get_cycle_modifier(cycle_toggle: bool) -> dict:
-    if cycle_toggle:
+def generate_daily_forecast(profile, moon_phase):
+    try:
+        day = datetime.now().strftime("%A")
+        dob = profile.get("dob") if profile else None
+        zodiac_info = get_chinese_zodiac(dob)
+        zodiac_display = f"{zodiac_info['element']} {zodiac_info['animal']}" if zodiac_info['animal'] != "Unknown" else "General"
+        base = {
+            "colors_good": ["Gold", "White", "Emerald"],
+            "colors_bad": ["Grey", "Black"],
+            "stones": ["Citrine", "Jade"],
+            "numbers": [3, 8],
+            "metal": "Gold"
+        }
         return {
-            "theme_addon": "Restoration and energetic conservation",
-            "avoid_extra": ["bright red"],
-            "favor_extra_stone": "moonstone",
-            "favor_extra_jewelry": "bracelet"
+            "day": day,
+            "zodiac": zodiac_display,
+            "moon_context": f"The {moon_phase} influences your energy today.",
+            **base
         }
-    return {
-        "theme_addon": "",
-        "avoid_extra": [],
-        "favor_extra_stone": None,
-        "favor_extra_jewelry": None
-    }
-
-def generate_daily_card(profile: dict, rules_df: pd.DataFrame, date_value=None) -> dict:
-    if date_value is None:
-        today_name = datetime.now().strftime("%A")
-        today_date = datetime.now().strftime("%Y-%m-%d")
-    else:
-        dt = pd.to_datetime(date_value)
-        today_name = dt.strftime("%A")
-        today_date = dt.strftime("%Y-%m-%d")
-
-    match = rules_df[rules_df["day"] == today_name]
-
-    if match.empty:
-        raise ValueError(f"No rule found for day: {today_name}")
-
-    row = match.iloc[0].to_dict()
-
-    birth_group = get_birth_year_group(profile["birth_year"])
-    cycle_mod = get_cycle_modifier(profile["cycle_toggle"])
-
-    wear_colors = list(row["wear_colors"])
-    avoid_colors = list(row["avoid_colors"]) + cycle_mod["avoid_extra"]
-
-    support_stones = [
-        {
-            "stone": row["support_stone_1"],
-            "jewelry_type": row["support_jewelry_type_1"]
-        },
-        {
-            "stone": row["support_stone_2"],
-            "jewelry_type": row["support_jewelry_type_2"]
+    except Exception:
+        return {
+            "day": datetime.now().strftime("%A"),
+            "zodiac": "Unknown",
+            "moon_context": "Unable to calculate.",
+            "colors_good": ["Gold"],
+            "colors_bad": ["Grey"],
+            "stones": ["Citrine"],
+            "numbers": [3],
+            "metal": "Gold"
         }
-    ]
 
-    if cycle_mod["favor_extra_stone"]:
-        support_stones.append({
-            "stone": cycle_mod["favor_extra_stone"],
-            "jewelry_type": cycle_mod["favor_extra_jewelry"]
-        })
+# --- SESSION INIT ---
 
-    if birth_group == "grounding":
-        wear_colors = wear_colors + ["earth brown"]
-    elif birth_group == "growth":
-        wear_colors = wear_colors + ["soft green"]
-    else:
-        wear_colors = wear_colors + ["lavender"]
-
-    wear_colors = wear_colors[:3]
-    avoid_colors = avoid_colors[:2]
-
-    theme = row["daily_theme"]
-    if cycle_mod["theme_addon"]:
-        theme = f"{theme} + {cycle_mod['theme_addon']}"
-
-    explanation = (
-        f"{row['explanation']} "
-        f"For this profile, the birth-year group is '{birth_group}', which shifts the recommendation emphasis. "
-        f"Current location bucket: {profile['current_location_bucket']}."
-    )
-
-    return {
-        "name": profile["name"],
-        "date": today_date,
-        "day": today_name,
-        "birth_year_group": birth_group,
-        "wear_colors": wear_colors,
-        "avoid_colors": avoid_colors,
-        "primary_stone": row["primary_stone"],
-        "primary_jewelry_type": row["primary_jewelry_type"],
-        "support_stones": support_stones,
-        "favored_metals": row["favored_metals"],
-        "avoid_metals": row["avoid_metals"],
-        "daily_theme": theme,
-        "explanation": explanation
+def init():
+    defaults = {
+        "user_profile": None,
+        "subscription_status": "free",
+        "sub_expiry": None,
+        "coupon_used": False,
+        "verified_payment": False,
+        "profile_error": None,
+        "device_id": None
     }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-def generate_weekly_cards(profile, rules_df):
-    today = datetime.now()
-    weekly_cards = []
+def check_subscription():
+    try:
+        expiry_str = st.session_state.get("sub_expiry")
+        if not expiry_str:
+            return False
+        expiry = datetime.fromisoformat(expiry_str)
+        if datetime.now() > expiry:
+            st.session_state.subscription_status = "expired"
+            return False
+        return True
+    except Exception:
+        return False
 
-    for i in range(7):
-        day_date = today + pd.Timedelta(days=i)
-        card = generate_daily_card(profile, rules_df, date_value=day_date)
-        card["locked"] = i >= 7  # placeholder for future paid gating
-        weekly_cards.append(card)
+def is_renewal_needed():
+    try:
+        if st.session_state.get("subscription_status") != "weekly":
+            return False
+        expiry_str = st.session_state.get("sub_expiry")
+        if not expiry_str:
+            return False
+        expiry = datetime.fromisoformat(expiry_str)
+        hours_left = (expiry - datetime.now()).total_seconds() / 3600
+        return hours_left <= 24
+    except Exception:
+        return False
 
-    return weekly_cards
+# --- UI ---
 
-# --------------------------------------------------
-# 3. STREAMLIT UI
-# --------------------------------------------------
+st.set_page_config(page_title="Belle", layout="centered")
 
-st.set_page_config(page_title="Belle App V1", layout="centered")
+init()
 
-st.title("Belle App V1")
-st.subheader("Ancient wisdom, modern structure")
+st.title("✨ Your Prosperity Timeline")
 
-name = st.text_input("What would you like to be called?", value="Elizabeth")
-birth_year = st.number_input("Birth year", min_value=1900, max_value=2100, value=1977, step=1)
+# --- SESSION WARNING ---
+st.warning("⚠️ Your profile is stored in your browser session. Keep this tab open to maintain access.")
 
-birth_location_bucket = st.selectbox(
-    "Birth location (rough)",
-    ["south_us_north_mexico", "mexico_city", "northern_mexico", "southern_mexico", "us_general"]
-)
+# --- FREE MOON ---
+moon = get_moon_phase()
+st.info(f"🌙 Current Moon Phase: **{moon}**")
 
-current_location_bucket = st.selectbox(
-    "Current location (rough)",
-    ["mexico_city", "south_us_north_mexico", "northern_mexico", "southern_mexico", "us_general"]
-)
+# --- PROFILE ---
+st.subheader("🔮 Your Cosmic Profile")
 
-cycle_toggle = st.toggle("Monthly cycle / lower-energy mode", value=False)
+if not st.session_state.user_profile:
+    st.markdown("Please create your profile to begin.")
+    st.caption("*Year is required. Month and Day are optional.*")
 
-user_profile = {
-    "name": name,
-    "birth_year": int(birth_year),
-    "birth_location_bucket": birth_location_bucket,
-    "current_location_bucket": current_location_bucket,
-    "cycle_toggle": cycle_toggle
-}
+    col1, col2 = st.columns(2)
+    with col1:
+        # ANTI-AUTOFILL: text_area instead of text_input
+        # Browsers NEVER autofill textareas
+        name = st.text_area("Your Identifier", placeholder="", height=68, key="belle_id", max_chars=50)
 
-# INIT
-if "generated" not in st.session_state:
-    st.session_state.generated = False
+        # ANTI-AUTOFILL: slider instead of number_input
+        # Browsers CANNOT autofill sliders
+        current_year = date.today().year
+        birth_year = st.slider("Birth Year (Required)", min_value=1900, max_value=current_year - 18, value=1990, key="belle_yr")
 
-# BUTTON
-if st.button("Generate My Belle Card"):
-    st.session_state.generated = True
+        col_sub1, col_sub2 = st.columns(2)
+        with col_sub1:
+            month_map = {None: None, "January": 1, "February": 2, "March": 3, "April": 4, "May": 5, "June": 6,
+                         "July": 7, "August": 8, "September": 9, "October": 10, "November": 11, "December": 12}
+            birth_month_str = st.selectbox("Month (Optional)", list(month_map.keys()), index=0, key="belle_mo")
+            birth_month = month_map[birth_month_str]
 
-# DISPLAY (persistent)
-if st.session_state.generated:
+        with col_sub2:
+            birth_day = st.slider("Day (Optional)", min_value=1, max_value=31, value=1, key="belle_dy")
 
-    card = generate_daily_card(user_profile, df_rules)
+    with col2:
+        time_birth = st.time_input("Time of Birth (Optional)", value=None, key="belle_tm")
+        location = st.text_area("Place of Birth (Optional)", placeholder="", height=68, key="belle_loc", max_chars=100)
+
+    if st.session_state.get("profile_error"):
+        st.error(st.session_state.profile_error)
+
+    if st.button("Create My Profile", type="primary", key="btn_create_profile"):
+        error = None
+
+        if not name or not name.strip():
+            error = "Please enter your identifier"
+        elif len(name.strip()) < 3 or not name.replace(" ", "").isalpha():
+            error = "Identifier must be at least 3 letters, no symbols"
+
+        if not error:
+            # For the day slider, if no month selected, set day to None
+            day_to_validate = birth_day if birth_month else None
+            valid, date_err = validate_dob(birth_year, birth_month, day_to_validate)
+            if not valid:
+                error = date_err
+
+        if error:
+            st.session_state.profile_error = error
+            st.rerun()
+        else:
+            try:
+                m = birth_month if birth_month else 1
+                d = birth_day if birth_month else 1
+                dob_obj = date(birth_year, m, d)
+
+                time_str = str(time_birth) if time_birth else "Unknown"
+                device_id = st.session_state.get("device_id") or str(uuid.uuid4())
+
+                hash_id = hashlib.sha256(
+                    f"{name}{dob_obj}{time_str}{location}{device_id}".encode()
+                ).hexdigest()
+
+                st.session_state.user_profile = {
+                    "name": name.strip(),
+                    "dob": dob_obj,
+                    "time": time_str,
+                    "location": location.strip() if location else "Unknown",
+                    "id": hash_id,
+                    "device_id": device_id
+                }
+                st.session_state.profile_error = None
+                st.success("Profile locked 🔒 Device bound.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error creating profile: {str(e)}")
+
+else:
+    profile = st.session_state.user_profile
+    zodiac_info = get_chinese_zodiac(profile.get("dob"))
+
+    st.markdown(f"**Name:** {profile.get('name', 'Unknown')}")
+    st.markdown(f"**Zodiac:** {zodiac_info['element']} {zodiac_info['animal']}")
+    st.markdown(f"**Born in:** {profile.get('location', 'N/A')}")
+    st.caption("Your device is bound to this profile. Keep this tab open to maintain access.")
+
+# --- PAYWALL ---
+st.divider()
+access = check_subscription()
+
+if not access:
+    if st.session_state.get("subscription_status") == "expired":
+        st.error("⚠️ Your access expired. Renew to continue.")
+
+    st.warning("🔒 Premium Locked")
+    st.markdown("### Unlock your week")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"[💰 Weekly ($10 MXN)]({STRIPE_WEEKLY_LINK})", unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"[💎 Yearly ($360 MXN)]({STRIPE_YEARLY_LINK})", unsafe_allow_html=True)
 
     st.markdown("---")
-    st.header(f"{card['name']}'s Daily Card")
-    st.write(f"**Date:** {card['date']} ({card['day']})")
-    st.write(f"**Theme:** {card['daily_theme']}")
-    st.write(f"**Wear Colors:** {', '.join(card['wear_colors'])}")
-    st.write(f"**Avoid Colors:** {', '.join(card['avoid_colors'])}")
-    st.write(f"**Primary Jewelry:** {card['primary_stone']} ({card['primary_jewelry_type']})")
+    st.markdown("### 🔐 Manual Verification")
+    st.info("📧 **Step 1:** Pay using the links above.\n📩 **Step 2:** Email your receipt to **contact@belle-app.com** (or DM us).\n🔑 **Step 3:** We will send you a unique activation code.\n🔢 **Step 4:** Enter that code below to unlock.")
 
-    st.write("**Support Jewelry:**")
-    for item in card["support_stones"]:
-        st.write(f"- {item['stone']} ({item['jewelry_type']})")
+    col_plan, col_code = st.columns(2)
+    with col_plan:
+        plan_choice = st.selectbox("Which plan did you purchase?", ["Weekly", "Yearly"], key="belle_plan")
+    with col_code:
+        code_input = st.text_input("Enter Activation Code", type="password", key="belle_code")
 
-    st.write(f"**Favored Metals:** {', '.join(card['favored_metals'])}")
-    st.write(f"**Avoid Metals:** {', '.join(card['avoid_metals'])}")
-    st.write(f"**Explanation:** {card['explanation']}")
+    if st.button("Activate Access", type="primary", key="btn_activate"):
+        if code_input in VALID_CODES:
+            try:
+                st.session_state.subscription_status = plan_choice.lower()
+                if plan_choice == "Weekly":
+                    st.session_state.sub_expiry = (datetime.now() + timedelta(days=7)).isoformat()
+                else:
+                    st.session_state.sub_expiry = (datetime.now() + timedelta(days=365)).isoformat()
+                st.session_state.verified_payment = True
+                st.success("Access granted ✨")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error verifying payment: {str(e)}")
+        else:
+            st.error("❌ Invalid code. Please check your email for your unique activation code.")
+            st.info("💡 Codes are issued manually after payment verification. Please email your receipt if you haven't received one.")
 
-    st.markdown("---")
-    st.subheader("Your 7-Day Timeline")
+else:
+    st.success("✨ Access Active")
 
-    weekly_cards = generate_weekly_cards(user_profile, df_rules)
+    if is_renewal_needed():
+        st.warning("⚠️ Your weekly subscription expires in less than 24 hours! Renew now.")
+        st.markdown(f"[💰 Renew Weekly]({STRIPE_WEEKLY_LINK})", unsafe_allow_html=True)
 
-    selected_day = st.radio(
-        "Choose your day",
-        options=list(range(1, 8)),
-        horizontal=True
-    )
+    try:
+        forecast = generate_daily_forecast(st.session_state.user_profile, moon)
 
-    for i, weekly_card in enumerate(weekly_cards):
-        with st.container():
+        st.subheader(f"🌟 {forecast['day']} Forecast")
+        st.markdown(f"**Zodiac:** {forecast['zodiac']}")
+        st.markdown(forecast["moon_context"])
 
-            is_unlocked = (
-               st.session_state.unlocked_all
-                or i in st.session_state.unlocked_days
-                or i == selected_day - 1
-            )
+        col1, col2, col3 = st.columns(3)
 
-            st.write(f"**Day {i+1}: {weekly_card['date']} ({weekly_card['day']})**")
+        with col1:
+            st.markdown("**🎨 Good Colors**")
+            for c in forecast.get("colors_good", []):
+                st.write(f"- {c}")
 
-            if is_unlocked:
-               st.write(f"Wear: {', '.join(weekly_card['wear_colors'])}")
-               st.write(f"Primary: {weekly_card['primary_stone']} ({weekly_card['primary_jewelry_type']})")
-               st.write(f"Theme: {weekly_card['daily_theme']}")
+        with col2:
+            st.markdown("**🚫 Avoid**")
+            for c in forecast.get("colors_bad", []):
+                st.write(f"- {c}")
 
-            else:
-               st.markdown(
-                    """
-                   <div style="
-                       opacity: 0.5;
-                        padding: 12px;
-                       border-radius: 12px;
-                       border: 1px solid #444;
-                        margin-top: 10px;
-                   ">
-                       🔒 Unlock This Week’s Possibilities ✨
-                    </div>
-                   """,
-                    unsafe_allow_html=True
-               )
-               unlock_clicked = st.button(f"✨ Unlock Day {i+1}", key=f"unlock_{i}")
+        with col3:
+            st.markdown("**💎 Stones & Metal**")
+            for s in forecast.get("stones", []):
+                st.write(f"- {s}")
+            st.write(f"**Metal:** {forecast.get('metal', 'Gold')}")
+            st.write(f"**Lucky Numbers:** {', '.join(map(str, forecast.get('numbers', [])))}")
+    except Exception as e:
+        st.error(f"Error displaying forecast: {str(e)}")
 
-               if unlock_clicked:
-                   st.session_state.unlocked_days.add(i)
+    # --- JEWELRY DIRECTORY & COUPON ---
+    st.divider()
+    st.subheader("📿 Jewelry Atelier")
 
-                   st.session_state.unlocked_all = False
+    owned = st.multiselect("I own:", ["Bracelet", "Necklace", "Ring", "Earrings"], key="belle_jewelry")
 
-                   st.query_params["days"] = ",".join(map(str, st.session_state.unlocked_days))
+    if owned:
+        st.markdown("### ✨ Suggested Pieces")
 
-    st.markdown("---")
-    st.markdown("## ✨ Unlock Your Full Week")
+        if not st.session_state.get("coupon_used"):
+            st.success(f"🎉 **Coupon Available!** Use code **{ATLIER_COUPON_CODE}** for 50% off one Atelier piece this week.")
+            if st.button("Claim Coupon", key="btn_claim_coupon"):
+                st.session_state.coupon_used = True
+                st.rerun()
+        else:
+            st.info("You've used your weekly coupon. A new one arrives next week!")
 
-    unlock_all = st.button("✨ Reveal My Full Alignment", key="unlock_all")
+        if "Bracelet" in owned:
+            st.markdown("#### Recommended Bracelet")
+            st.image("https://placehold.co/200x200?text=Moonstone+Bracelet", width=150)
+            st.markdown("[Shop Atelier](https://your-atelier-link.com)")
 
-    if unlock_all:
-       st.session_state.unlocked_all = True
-       st.query_params["all"] = "1"
+        if "Necklace" in owned:
+            st.markdown("#### Recommended Necklace")
+            st.image("https://placehold.co/200x200?text=Jade+Necklace", width=150)
+            st.markdown("[Shop Atelier](https://your-atelier-link.com)")
+
+    # --- BIRTH CHART ---
+    st.divider()
+    st.subheader("📜 Full Birth Chart")
+    st.write("Your complete natal chart with planetary positions and ancient wisdom analysis.")
+    st.markdown(f"[🔓 Unlock Full Chart ($100 MXN)]({STRIPE_BIRTH_CHART_LINK})", unsafe_allow_html=True)
+
+# --- FOOTER ---
+st.divider()
+st.caption("Belle v14 | Secure & Private")
