@@ -18,12 +18,32 @@ VALID_CODES = ["BELLE-X0-2026"]
 def get_moon_phase():
     try:
         today = date.today()
-        phase_idx = (today.day % 29)
-        phases = ["New Moon","Waxing Crescent","First Quarter","Waxing Gibbous",
-                  "Full Moon","Waning Gibbous","Last Quarter","Waning Crescent"]
-        return phases[phase_idx // 3]
-    except Exception:
-        return "Unknown"
+        # A more robust approximation: 
+        # We use a known reference New Moon date (e.g., Jan 6, 2000)
+        # and calculate days elapsed.
+        reference_date = date(2000, 1, 6)
+        days_since_ref = (today - reference_date).days
+        
+        # Synodic month is approx 29.53 days
+        cycle_position = days_since_ref % 29.53
+        
+        # Map to phases (8 phases)
+        phase_idx = int(cycle_position / (29.53 / 8))
+        
+        phases = ["New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous",
+                  "Full Moon", "Waning Gibbous", "Last Quarter", "Waning Crescent"]
+        
+        # Ensure index is within bounds
+        if phase_idx >= 8:
+            phase_idx = 0
+            
+        return phases[phase_idx]
+        
+    except Exception as e:
+        # Log the error to your console so you can see what went wrong
+        # In Streamlit Cloud, this goes to the logs
+        print(f"Error calculating moon phase: {e}") 
+        return "Waxing Crescent" # Safe fallback so UI looks good
 
 def get_chinese_zodiac(dob):
     if not dob:
