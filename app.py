@@ -250,7 +250,7 @@ if not access:
 
     st.markdown("---")
     st.markdown("### 🔐 Manual Verification")
-    st.info("📧 **Step 1:** Pay using the links above.\n📩 **Step 2:** Email your receipt to **sales@belle.com.mx** (or DM us).\n🔑 **Step 3:** We will send you a unique activation code.\n🔢 **Step 4:** Enter that code below to unlock.")
+    st.info("📧 **Step 1:** Pay using the links above.\n📩 **Step 2:** Email your receipt to **sales@belle.com.mx** (or DM +52 56 2398-4551).\n🔑 **Step 3:** We will send you a unique activation code.\n🔢 **Step 4:** Enter that code below to unlock.")
 
     col_plan, col_code = st.columns(2)
     with col_plan:
