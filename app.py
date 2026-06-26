@@ -423,26 +423,26 @@ st.caption("Belle v14 | Secure & Private")
     # -------------------------------------------------------------
     # STEP 2: GOOGLE MANIFEST INJECTOR
     # -------------------------------------------------------------
-    query_params = st.query_params
-    if "pwa_manifest" in query_params:
-        import json
-        manifest_data = {
-            "name": "Belle App",
-            "short_name": "Belle",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#000000",
-            "theme_color": "#000000",
-            "orientation": "portrait",
-            "icons": [
-                {
-                    "src": "https://belle.com.mx",
-                    "sizes": "512x512",
-                    "type": "image/png",
-                    "purpose": "any maskable"
-                }
-            ]
-        }
-        st.json(manifest_data)
+query_params = st.query_params
+if "pwa_manifest" in query_params:
+    import json
+    manifest_data = {
+        "name": "Belle App",
+        "short_name": "Belle",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#000000",
+        "theme_color": "#000000",
+        "orientation": "portrait",
+        "icons": [
+            {
+                "src": "https://belle.com.mx",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ]
+    }
+st.json(manifest_data)
         st.stop()
     
