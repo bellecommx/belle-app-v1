@@ -30,27 +30,27 @@ st.markdown("""
     # STEP 2: GOOGLE MANIFEST INJECTOR (Put at the very bottom of your script)
     # -------------------------------------------------------------
     # This creates a hidden URL path on your app that Bubblewrap needs to verify ownership
-    query_params = st.query_params
-    if "pwa_manifest" in query_params:
-        manifest_data = {
-            "name": "Belle App",
-            "short_name": "Belle",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#000000",
-            "theme_color": "#000000",
-            "orientation": "portrait",
-            "icons": [
-                {
-                    "src": "https://belle.com.mx", # Update to your asset icon later
-                    "sizes": "512x512",
-                    "type": "image/png",
-                    "purpose": "any maskable"
-                }
-            ]
-        }
-        st.json(manifest_data)
-        st.stop() # Prevents the rest of the app from loading on this verification route
+query_params = st.query_params
+if "pwa_manifest" in query_params:
+    manifest_data = {
+        "name": "Belle App",
+        "short_name": "Belle",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#000000",
+        "theme_color": "#000000",
+        "orientation": "portrait",
+        "icons": [
+             {
+                "src": "https://belle.com.mx", # Update to your asset icon later
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ]
+    }
+    st.json(manifest_data)
+    st.stop() # Prevents the rest of the app from loading on this verification route
     
 from datetime import datetime, timedelta, date
 import hashlib
