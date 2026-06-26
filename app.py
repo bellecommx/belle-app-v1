@@ -1,20 +1,17 @@
 
 import streamlit as st
-python
-
-    import streamlit as st
-    import json
-    from datetime import date
+import json
+from datetime import date
     
     # -------------------------------------------------------------
     # STEP 1: FORCE CLEAN MOBILE LAYOUT (Put at the absolute top)
     # -------------------------------------------------------------
-    st.set_page_config(
-        page_title="Belle App",
-        page_icon="🌙",
-        layout="centered", # Forces content into a clean mobile column
-        initial_sidebar_state="collapsed" # Hides the desktop sidebar on phones
-    )
+st.set_page_config(
+    page_title="Belle App",
+    page_icon="🌙",
+    layout="centered", # Forces content into a clean mobile column
+    initial_sidebar_state="collapsed" # Hides the desktop sidebar on phones
+)
     
     # Hide Streamlit header/footer watermarks for a pure native app look
     st.markdown("""
