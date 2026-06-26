@@ -1,0 +1,17 @@
+{
+    "name": "Belle App",
+    "short_name": "Belle",
+    "start_url": "https://belle-app-v1.streamlit.app",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#000000",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=375,fit=crop/dWxv57Gb54hxWQ76/belle-logo-com-mx-atelier-apothecary-0Mi2xPNhJY1DK1wQ.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
