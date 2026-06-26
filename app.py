@@ -14,13 +14,13 @@ st.set_page_config(
 )
     
     # Hide Streamlit header/footer watermarks for a pure native app look
-    st.markdown("""
-        <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-        </style>
-    """, unsafe_allow_html=True)
+st.markdown("""
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
     
     
     # [Your existing code like get_moon_phase() and get_chinese_zodiac() goes here]
