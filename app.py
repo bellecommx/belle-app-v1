@@ -444,5 +444,5 @@ if "pwa_manifest" in query_params:
         ]
     }
 st.json(manifest_data)
-        st.stop()
+st.stop()
     
